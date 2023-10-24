@@ -1,9 +1,8 @@
 const express = require("express");
 const app = express();
-app.use(express.json())
-
-// TODO: Follow instructions in the checkpoint to implement ths API.
 const pastes = require("./data/pastes-data");
+
+app.use(express.json());
 
 app.use("/pastes/:pasteId", (req, res, next) => {
   const { pasteId } = req.params;
@@ -12,7 +11,7 @@ app.use("/pastes/:pasteId", (req, res, next) => {
   if (foundPaste) {
     res.json({ data: foundPaste });
   } else {
-    next(`Paste id not found: ${pasteId}`);
+    next({ status: 404, message: `Paste id not found: ${pasteId}` });
   }
 });
 
@@ -20,15 +19,27 @@ app.get("/pastes", (req, res) => {
   res.json({ data: pastes });
 });
 
-// Variable to hold the next ID
-// Because some IDs may already be used, find the largest assigned ID
+function bodyHasTextProperty(req, res, next) {
+  const { data: { text } = {} } = req.body;
+  if (text) {
+    return next();
+  }
+  next({
+    status: 400,
+    message: "A 'text' property is required.",
+  });
+}
+
 let lastPasteId = pastes.reduce((maxId, paste) => Math.max(maxId, paste.id), 0);
 
-app.post("/pastes", (req, res, next) => {
-  const { data: { name, syntax, exposure, expiration, text, user_id } = {} } = req.body;
-  if (text) {
+app.post(
+  "/pastes",
+  bodyHasTextProperty, // Add validation middleware function
+  (req, res) => {
+    // Route handler no longer has validation code.
+    const { data: { name, syntax, exposure, expiration, text, user_id } = {} } = req.body;
     const newPaste = {
-      id: ++lastPasteId, // Increment last ID, then assign as the current ID
+      id: ++lastPasteId, // Increment last id then assign as the current ID
       name,
       syntax,
       exposure,
@@ -38,10 +49,8 @@ app.post("/pastes", (req, res, next) => {
     };
     pastes.push(newPaste);
     res.status(201).json({ data: newPaste });
-  } else {
-    res.sendStatus(400);
   }
-});
+);
 
 // Not found handler
 app.use((request, response, next) => {
@@ -49,9 +58,10 @@ app.use((request, response, next) => {
 });
 
 // Error handler
-app.use((error, request, response, next) => {
+app.use((error, req, res, next) => {
   console.error(error);
-  response.send(error);
+  const { status = 500, message = "Something went wrong!" } = error;
+  res.status(status).json({ error: message });
 });
 
 module.exports = app;
